@@ -59,7 +59,7 @@ interface TokenRecipient {
  * @notice Contract for the ZToken
  * @dev All function calls are currently implemented without side effects
  */
-contract token is Ownable, ERC20, TokenRecipient {
+contract ZToken is Ownable, ERC20, TokenRecipient {
     // attach library functions
     using SafeMath for uint256;
     using SafeERC20 for TokenInterface;
@@ -69,8 +69,9 @@ contract token is Ownable, ERC20, TokenRecipient {
     event CommssionUpdate(
         uint256 _numerator,
         uint256 _denominator,
-        string data
+        string _data
     );
+    event TransferPreSigned(address _from, address _to, uint256 _value, uint256 _networkFee);
 
     //public variables
     TokenInterface private backedTokenContract;
@@ -139,7 +140,7 @@ contract token is Ownable, ERC20, TokenRecipient {
     }
 
     modifier onlyPhoenix {
-        require(msg.sender == phoenixCrw, "Only partner is allowed");
+        require(msg.sender == phoenixCrw, "Only Phoenix is allowed");
         _;
     }
 
@@ -148,9 +149,9 @@ contract token is Ownable, ERC20, TokenRecipient {
     ////////////////////////////////////////////////////////////////
 
     /**
-     * @notice Function called by token contract wherever tokens are deposited to this contract
-     * @dev Only token contract can call.
-     * @param _amount the amount of OT to be transferred
+     * @notice transfer tokens from contract 
+     * @dev Only owner can call, tokens will be transferred and equivalent amount of ZToken will be burnt.
+     * @param _amount the amount of tokens to be transferred
      * @param _receiver address of the receiver
 
      */
@@ -193,7 +194,7 @@ contract token is Ownable, ERC20, TokenRecipient {
 
 
     /**
-     * @notice Function called by token contract whenever tokens are deposited to this contract
+     * @notice Standard transfer function to Transfer token
      * @dev overriden Function of the openzeppelin ERC20 contract
      * @param recipient receiver's address
      * @param amount The amount to be transferred
@@ -204,17 +205,56 @@ contract token is Ownable, ERC20, TokenRecipient {
         override
         returns (bool)
     {
-        uint256 feeToOlegacy = calculateCommissionPhoenixCrw(amount);
-        uint256 feeToZowner = calculateCommissionToZCrw(amount);
-
-        if (feeToOlegacy > 0) _transfer(_msgSender(), phoenixCrw, feeToOlegacy);
-        if (feeToZowner > 0) _transfer(_msgSender(), zCrw, feeToZowner);
-        uint256 amount_credit = feeToZowner.add(feeToOlegacy);
-        _transfer(_msgSender(), recipient, amount.sub(amount_credit));
+        privateTransfer(msg.sender, recipient, amount);
+        return true;
     }
+    
+    /**
+     * @notice Standard transferFrom. Send tokens on behalf of spender
+     * @dev overriden Function of the openzeppelin ERC20 contract
+     * @param recipient receiver's address
+     * @param sender transfer token from account
+     * @param amount The amount to be transferred
+     */
+    function transferFrom(address sender, address recipient, uint256 amount)
+        public
+        virtual
+        override
+        returns (bool)
+    {
+        uint256 currentAllowance = allowance(sender, _msgSender());
+        require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
+        _approve(sender, _msgSender(), currentAllowance - amount);
+        privateTransfer(sender, recipient, amount);
+        return true;
+    }
+    
 
     /**
-     * @notice Add phoenix wallet address. This address will be responsible for holding commission on tokens transfer
+     * @notice Internal method to handle transfer logic
+     * @dev Notifies recipient, if recipient is a trusted contract
+     * @param _from Sender address
+     * @param _recipient Recipient address
+     * @param _amount amount of tokens to be transferred
+     * @return bool
+     */
+    function privateTransfer(address _from, address _recipient, uint256 _amount)
+        internal
+        onlyNonZeroAddress(_recipient)
+        returns (bool)
+    {
+        uint256 feeToOlegacy = calculateCommissionPhoenixCrw(_amount);
+        uint256 feeToZowner = calculateCommissionToZCrw(_amount);
+
+        if (feeToOlegacy > 0) _transfer(_from, phoenixCrw, feeToOlegacy);
+        if (feeToZowner > 0) _transfer(_from, zCrw, feeToZowner);
+        uint256 amount_credit = feeToZowner.add(feeToOlegacy);
+        _transfer(_from, _recipient, _amount.sub(amount_credit));
+        return true;
+    } 
+ 
+    /**
+     * @notice update phoenix wallet address. This address will be responsible for holding commission on tokens transfer
      * @dev Only Phoenix can call
      * @param _user The address of phoenixCrw wallet
      * @return Bool value
@@ -225,6 +265,7 @@ contract token is Ownable, ERC20, TokenRecipient {
         returns (bool)
     {
         phoenixCrw = _user;
+        return true;
     }
 
     /**
@@ -247,7 +288,6 @@ contract token is Ownable, ERC20, TokenRecipient {
 
     /**
      * @notice check transer fee credited to ZToken owner
-     * @dev Does not checks if sender/recipient is whitelisted
      * @param _amount The intended amount of transfer
      * @return uint256 Calculated commission
      */
@@ -265,7 +305,6 @@ contract token is Ownable, ERC20, TokenRecipient {
 
     /**
      * @notice check transer fee credited to Phoenix
-     * @dev Does not checks if sender/recipient is whitelisted
      * @param _amount The intended amount of transfer
      * @return uint256 Calculated commission
      */
@@ -293,7 +332,7 @@ contract token is Ownable, ERC20, TokenRecipient {
     {
         commission_denominator_phoenix_crw = _d;
         commission_numerator_phoenix_crw = _n;
-        emit CommssionUpdate(_n, _d, "partner commission");
+        emit CommssionUpdate(_n, _d, "Phoenix commission");
     }
 
     /**
@@ -305,12 +344,12 @@ contract token is Ownable, ERC20, TokenRecipient {
     function updateCommssionZTranfer(uint256 _n, uint256 _d) public onlyOwner {
         commission_denominator_zcrw = _d;
         commission_numerator_zcrw = _n;
-        emit CommssionUpdate(_n, _d, "z commission");
+        emit CommssionUpdate(_n, _d, "Z owner's commission");
     }
 
     /**
      * @notice Update commission to be charged on token minting
-     * @dev Only owner can call
+     * @dev Only phoenix can call
      * @param _n The numerator of commission
      * @param _d The denominator of commission
      */
@@ -319,7 +358,8 @@ contract token is Ownable, ERC20, TokenRecipient {
         commission_numerator_minting = _n;
         emit CommssionUpdate(_n, _d, "Minting commision");
     }
-
+    
+    
     /**
      * @notice Prevents contract from accepting ETHs
      * @dev Contracts can still be sent ETH with self destruct. If anyone deliberately does that, the ETHs will be lost
@@ -327,4 +367,196 @@ contract token is Ownable, ERC20, TokenRecipient {
     receive() external payable {
         revert("Contract does not accept ethers");
     }
+    
+    
+}
+
+/**
+ * @title AdvancedOToken
+ * @author Phoenix 
+ */    
+contract AdvancedZToken is ZToken {
+    mapping(address => mapping(bytes32 => bool)) public tokenUsed; // mapping to track token is used or not
+    
+    bytes4 public methodWord_transfer = bytes4(keccak256("transfer(address,uint256)"));
+    bytes4 public methodWord_approve = bytes4(keccak256("approve(address,uint256)"));
+    bytes4 public methodWord_increaseApproval = bytes4(keccak256("increaseAllowance(address,uint256)"));
+    bytes4 public methodWord_decreaseApproval = bytes4(keccak256("decreaseAllowance(address,uint256)"));
+
+    using SafeMath for uint256;
+
+    constructor(
+        address _goldTokenAddress,
+        address _phoenixCrw,
+        address _zcrw,
+        address _sellingWallet)  ZToken( _goldTokenAddress, _phoenixCrw, _zcrw, _sellingWallet) {
+    }
+
+    /**
+    * @dev ID of the executing chain
+    * @return uint value
+     */
+    function getChainID() public view returns (uint256) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+        return id;
+    }
+
+    /**
+     * @notice Validates the message and signature
+     * @param proof The message that was expected to be signed by user
+     * @param message The message that user signed
+     * @param r Signature component
+     * @param s Signature component
+     * @param v Signature component
+     * @param token The unique token for each delegated function
+     * @return address Signer of message
+     */
+    function preAuthValidations(bytes32 proof, bytes32 message, bytes32 token, bytes32 r, bytes32 s, uint8 v)
+        private
+        returns(address)
+    {
+        address signer = getSigner(message, r, s, v);
+        require(signer != address(0),"Zero address not allowed");
+        require(!tokenUsed[signer][token],"Token already used");
+        require(proof == message, "Invalid proof");
+        tokenUsed[signer][token] = true;
+        return signer;
+    }
+
+    /**
+     * @notice Find signer
+     * @param message The message that user signed
+     * @param r Signature component
+     * @param s Signature component
+     * @param v Signature component
+     * @return address Signer of message
+     */
+    function getSigner(bytes32 message, bytes32 r, bytes32 s, uint8 v)
+        public
+        pure
+        returns (address)
+    {
+        bytes memory prefix = "\x19Ethereum Signed Message:\n32";
+        bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, message));
+        address signer = ecrecover(prefixedHash, v, r, s);
+        return signer;
+    }
+
+     /**
+     * @notice Delegated transfer. Gas fee will be paid by relayer
+     * @param message The message that user signed
+     * @param r Signature component
+     * @param s Signature component
+     * @param v Signature component
+     * @param token The unique token for each delegated function
+     * @param networkFee The fee that will be paid to relayer for gas fee he spends
+     * @param to The array of recipients
+     * @param amount The array of amounts to be transferred
+     */
+    function preAuthorizedTransfer(
+        bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint256 networkFee, address to, uint256 amount)
+        public
+    {
+        bytes32 proof = getProofTransfer(methodWord_transfer, token, networkFee, msg.sender, to, amount);
+        address signer = preAuthValidations(proof, message, token, r, s, v);
+
+        // Deduct network fee if broadcaster charges network fee
+        if (networkFee > 0) {
+            privateTransfer(signer, msg.sender, networkFee);
+        }
+        privateTransfer(signer, to, amount);
+        emit TransferPreSigned(signer, to, amount, networkFee);
+    }
+
+    /**
+     * @notice Delegated approval. Gas fee will be paid by relayer
+     * @dev Only approve, increaseApproval and decreaseApproval can be delegated
+     * @param message The message that user signed
+     * @param r Signature component
+     * @param s Signature component
+     * @param v Signature component
+     * @param token The unique token for each delegated function
+     * @param networkFee The fee that will be paid to relayer for gas fee he spends
+     * @param to The spender address
+     * @param amount The amount to be allowed
+     * @return Bool value
+     */
+    function preAuthorizedApproval(
+        bytes4 methodHash, bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint256 networkFee, address to, uint256 amount)
+        public
+        returns (bool)
+    {
+        bytes32 proof = getProofApproval (methodHash, token, networkFee, msg.sender, to, amount);
+        address signer = preAuthValidations(proof, message, token, r, s, v);
+        uint256 currentAllowance = allowance(signer, _msgSender());
+        // Perform approval
+        if(methodHash == methodWord_approve) _approve(signer, to, amount);
+        else if(methodHash == methodWord_increaseApproval) _approve(signer, to, currentAllowance.add(amount));
+        else if(methodHash == methodWord_decreaseApproval) _approve(signer, to, currentAllowance.sub(amount));
+        return true;
+    }
+
+    /**
+     * @notice Get the message to be signed in case of delegated transfer/approvals
+     * @param methodHash The method hash for which delegate action in to be performed
+     * @param token The unique token for each delegated function
+     * @param networkFee The fee that will be paid to relayer for gas fee he spends
+     * @param to The recipient or spender
+     * @param amount The amount to be transferred
+     * @return Bool value
+     */
+    function getProofTransfer(bytes4 methodHash, bytes32 token, uint256 networkFee, address broadcaster, address to, uint256 amount)
+        public
+        view
+        returns (bytes32)
+    {
+        require(methodHash == methodWord_transfer, "Method not supported");
+        bytes32 proof = keccak256(abi.encodePacked(
+            getChainID(),
+            bytes4(methodHash),
+            address(this),
+            token,
+            networkFee,
+            broadcaster,
+            to,
+            amount
+    ));
+        return proof;
+    }
+
+    /**
+     * @notice Get the message to be signed in case of delegated transfer/approvals
+     * @param methodHash The method hash for which delegate action in to be performed
+     * @param token The unique token for each delegated function
+     * @param networkFee The fee that will be paid to relayer for gas fee he spends
+     * @param to The recipient or spender
+     * @param amount The amount to be approved
+     * @return Bool value
+     */
+    function getProofApproval(bytes4 methodHash, bytes32 token, uint256 networkFee, address broadcaster, address to, uint256 amount)
+        public
+        view
+        returns (bytes32)
+    {
+        require(
+            methodHash == methodWord_approve ||
+            methodHash == methodWord_increaseApproval ||
+            methodHash == methodWord_decreaseApproval,
+            "Method not supported");
+        bytes32 proof = keccak256(abi.encodePacked(
+            getChainID(),
+            bytes4(methodHash),
+            address(this),
+            token,
+            networkFee,
+            broadcaster,
+            to,
+            amount
+        ));
+        return proof;
+    }
+    
 }
