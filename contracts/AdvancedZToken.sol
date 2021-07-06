@@ -134,7 +134,7 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
     modifier isContractaAddress(address _addressContract) {
         require(
             _addressContract.isContract(),
-            "Only Token contract is allowed"
+            "Is contract is allowed"
         );
         _;
     }

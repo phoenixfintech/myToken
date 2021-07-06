@@ -1,0 +1,25 @@
+{
+  "name": "ztoken-eth-contracts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "truffle test",
+    "coverage": "./node_modules/.bin/solidity-coverage",
+    "_run-coverage": "truffle run coverage"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "coveralls": "^3.0.9",
+    "decimal.js": "^10.2.0",
+    "openzeppelin-solidity": "^4.2.0",
+    "solidity-coverage": "^0.6.7"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.2.0"
+  }
+}
