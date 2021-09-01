@@ -54,12 +54,11 @@ interface TokenRecipient {
 }
 
 /**
- * @title ZToken
- * @author Phoenix
- * @notice Contract for the ZToken
- * @dev All function calls are currently implemented without side effects
+ * @title ERC20 Token
+ * @author Prashant Gangwar
+ * @notice Contract for the Token
  */
-contract ZToken is Ownable, ERC20, TokenRecipient {
+contract ERC20Token is Ownable, ERC20, TokenRecipient {
     // attach library functions
     using SafeMath for uint256;
     using SafeERC20 for TokenInterface;
@@ -83,34 +82,36 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
     uint256 public commission_numerator_minting = 1; // commission percentage on minting 0.025%
     uint256 public commission_denominator_minting = 4;
 
-    uint256 public commission_numerator_zcrw = 1; // commission percentage to zowner 0.005%
-    uint256 public commission_denominator_zcrw = 200;
+    uint256 public commission_numerator_tokenCrw = 1; // commission percentage to token owner 0.005%
+    uint256 public commission_denominator_tokenCrw = 200;
 
-    uint256 public commission_numerator_phoenix_crw = 1; // commission percentage to zowner 0.005%
+    uint256 public commission_numerator_phoenix_crw = 1; // commission percentage to token owner 0.005%
     uint256 public commission_denominator_phoenix_crw = 200;
 
     // addresses at which fees transferred
-    address public phoenixCrw; // Z commission to phoenixCRW
-    address public zCrw; // Z commission to ZCRW
+    address public phoenixCrw; // token commission to phoenixCRW
+    address public tokenCrw; // token commission to token Central revenue wallet
 
-    // tokens minted in this wallet
+    // tokens minted in this wallet when backed token is received
     address public sellingWallet;
 
     constructor(
         address _goldTokenAddress,
         address _phoenixCrw,
-        address _zcrw,
-        address _sellingWallet
+        address _tokenCrw,
+        address _sellingWallet,
+        string memory _name,
+        string memory _symbol
     )
         isContractaAddress(_goldTokenAddress)
         onlyNonZeroAddress(_phoenixCrw)
-        onlyNonZeroAddress(_zcrw)
+        onlyNonZeroAddress(_tokenCrw)
         onlyNonZeroAddress(_sellingWallet)
-        ERC20("ZToken", "ZT")
+        ERC20(_name, _symbol)
     {
         backedTokenContract = TokenInterface(_goldTokenAddress);
         phoenixCrw = _phoenixCrw;
-        zCrw = _zcrw;
+        tokenCrw = _tokenCrw;
         sellingWallet = _sellingWallet;
     }
 
@@ -150,7 +151,7 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
 
     /**
      * @notice transfer tokens from contract 
-     * @dev Only owner can call, tokens will be transferred and equivalent amount of ZToken will be burnt.
+     * @dev Only owner can call, tokens will be transferred and equivalent amount of Token will be burnt from owner address.
      * @param _amount the amount of tokens to be transferred
      * @param _receiver address of the receiver
 
@@ -224,7 +225,7 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
     {
         uint256 currentAllowance = allowance(sender, _msgSender());
         require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
-        _approve(sender, _msgSender(), currentAllowance - amount);
+        _approve(sender, _msgSender(), currentAllowance.sub(amount));
         privateTransfer(sender, recipient, amount);
         return true;
     }
@@ -243,12 +244,12 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
         onlyNonZeroAddress(_recipient)
         returns (bool)
     {
-        uint256 feeToOlegacy = calculateCommissionPhoenixCrw(_amount);
-        uint256 feeToZowner = calculateCommissionToZCrw(_amount);
+        uint256 feeToPhoenix = calculateCommissionPhoenixCrw(_amount);
+        uint256 feeTokenOwner = calculateCommissionTokenCrw(_amount);
 
-        if (feeToOlegacy > 0) _transfer(_from, phoenixCrw, feeToOlegacy);
-        if (feeToZowner > 0) _transfer(_from, zCrw, feeToZowner);
-        uint256 amount_credit = feeToZowner.add(feeToOlegacy);
+        if (feeToPhoenix > 0) _transfer(_from, phoenixCrw, feeToPhoenix);
+        if (feeTokenOwner > 0) _transfer(_from, tokenCrw, feeTokenOwner);
+        uint256 amount_credit = feeTokenOwner.add(feeToPhoenix);
         _transfer(_from, _recipient, _amount.sub(amount_credit));
         return true;
     } 
@@ -287,19 +288,19 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
     }
 
     /**
-     * @notice check transer fee credited to ZToken owner
+     * @notice check transer fee credited to Token owner
      * @param _amount The intended amount of transfer
      * @return uint256 Calculated commission
      */
-    function calculateCommissionToZCrw(uint256 _amount)
+    function calculateCommissionTokenCrw(uint256 _amount)
         public
         view
         returns (uint256)
     {
         return
             _amount
-                .mul(commission_numerator_zcrw)
-                .div(commission_denominator_zcrw)
+                .mul(commission_numerator_tokenCrw)
+                .div(commission_denominator_tokenCrw)
                 .div(100);
     }
 
@@ -336,14 +337,14 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
     }
 
     /**
-     * @notice Update commission to be charged on each token transfer for Z owner
+     * @notice Update commission to be charged on token transfer
      * @dev Only owner can call
      * @param _n The numerator of commission
      * @param _d The denominator of commission
      */
-    function updateCommssionZTranfer(uint256 _n, uint256 _d) public onlyOwner {
-        commission_denominator_zcrw = _d;
-        commission_numerator_zcrw = _n;
+    function updateCommssionTokenTranfer(uint256 _n, uint256 _d) public onlyOwner {
+        commission_denominator_tokenCrw = _d;
+        commission_numerator_tokenCrw = _n;
         emit CommssionUpdate(_n, _d, "Z owner's commission");
     }
 
@@ -375,7 +376,7 @@ contract ZToken is Ownable, ERC20, TokenRecipient {
  * @title AdvancedOToken
  * @author Phoenix 
  */    
-contract AdvancedZToken is ZToken {
+contract AdvancedToken is ERC20Token {
     mapping(address => mapping(bytes32 => bool)) public tokenUsed; // mapping to track token is used or not
     
     bytes4 public methodWord_transfer = bytes4(keccak256("transfer(address,uint256)"));
@@ -388,8 +389,11 @@ contract AdvancedZToken is ZToken {
     constructor(
         address _goldTokenAddress,
         address _phoenixCrw,
-        address _zcrw,
-        address _sellingWallet)  ZToken( _goldTokenAddress, _phoenixCrw, _zcrw, _sellingWallet) {
+        address _tokenCrw,
+        address _sellingWallet,
+        string memory _name,
+        string memory _symbol
+        )  ERC20Token( _goldTokenAddress, _phoenixCrw, _tokenCrw, _sellingWallet, _name, _symbol) {
     }
 
     /**
