@@ -55,7 +55,7 @@ interface TokenRecipient {
 
 /**
  * @title ERC20 Token
- * @author Prashant Gangwar
+ * @author Phoenix
  * @notice Contract for the Token
  */
 contract ERC20Token is Ownable, ERC20, TokenRecipient {
@@ -90,7 +90,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
 
     // addresses at which fees transferred
     address public phoenixCrw; // token commission to phoenixCRW
-    address public tokenCrw; // token commission to token Central revenue wallet
+    address public myTokenCrw; // token commission to token Central revenue wallet
 
     // tokens minted in this wallet when backed token is received
     address public sellingWallet;
@@ -98,20 +98,20 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     constructor(
         address _goldTokenAddress,
         address _phoenixCrw,
-        address _tokenCrw,
+        address _mytokencrw,
         address _sellingWallet,
         string memory _name,
         string memory _symbol
     )
-        isContractaAddress(_goldTokenAddress)
+        isContractAddress(_goldTokenAddress)
         onlyNonZeroAddress(_phoenixCrw)
-        onlyNonZeroAddress(_tokenCrw)
+        onlyNonZeroAddress(_mytokencrw)
         onlyNonZeroAddress(_sellingWallet)
         ERC20(_name, _symbol)
     {
         backedTokenContract = TokenInterface(_goldTokenAddress);
         phoenixCrw = _phoenixCrw;
-        tokenCrw = _tokenCrw;
+        myTokenCrw = _mytokencrw;
         sellingWallet = _sellingWallet;
     }
 
@@ -132,7 +132,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         _;
     }
 
-    modifier isContractaAddress(address _addressContract) {
+    modifier isContractAddress(address _addressContract) {
         require(
             _addressContract.isContract(),
             "Only contract is allowed"
@@ -166,7 +166,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
             "Insufficiet balance of token"
         );
         backedTokenContract.transfer(_receiver, _amount);
-        _burn(msg.sender, _amount);
+        _burn(sellingWallet, _amount);
     }
 
     /**
@@ -245,11 +245,11 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         returns (bool)
     {
         uint256 feeToPhoenix = calculateCommissionPhoenixCrw(_amount);
-        uint256 feeTokenOwner = calculateCommissionTokenCrw(_amount);
+        uint256 feeMyTokenOwner = calculateCommissionMyTokenCrw(_amount);
 
         if (feeToPhoenix > 0) _transfer(_from, phoenixCrw, feeToPhoenix);
-        if (feeTokenOwner > 0) _transfer(_from, tokenCrw, feeTokenOwner);
-        uint256 amount_credit = feeTokenOwner.add(feeToPhoenix);
+        if (feeMyTokenOwner > 0) _transfer(_from, myTokenCrw, feeMyTokenOwner);
+        uint256 amount_credit = feeMyTokenOwner.add(feeToPhoenix);
         _transfer(_from, _recipient, _amount.sub(amount_credit));
         return true;
     } 
@@ -292,7 +292,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _amount The intended amount of transfer
      * @return uint256 Calculated commission
      */
-    function calculateCommissionTokenCrw(uint256 _amount)
+    function calculateCommissionMyTokenCrw(uint256 _amount)
         public
         view
         returns (uint256)
@@ -342,10 +342,10 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _n The numerator of commission
      * @param _d The denominator of commission
      */
-    function updateCommssionTokenTranfer(uint256 _n, uint256 _d) public onlyOwner {
+    function updateCommssionMyTokenTranfer(uint256 _n, uint256 _d) public onlyOwner {
         commission_denominator_tokenCrw = _d;
         commission_numerator_tokenCrw = _n;
-        emit CommssionUpdate(_n, _d, "Z owner's commission");
+        emit CommssionUpdate(_n, _d, "MyToken owner's commission");
     }
 
     /**
