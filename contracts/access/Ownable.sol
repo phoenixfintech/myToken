@@ -69,4 +69,3 @@ abstract contract Ownable is Context {
         emit OwnershipTransferred(oldOwner, newOwner);
     }
 }
-{"mode":"full","isActive":false}

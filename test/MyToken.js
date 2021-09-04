@@ -1,4 +1,4 @@
-const AdvancedZToken = artifacts.require("AdvancedZToken");
+const MyToken = artifacts.require("MyToken");
 const { add, mul, div } = require("./helper");
 const config = require("../config");
 const DECIMAL_MULTIPLIER = config.DECIMAL_MULTIPLIER;
@@ -12,7 +12,7 @@ const MSGS = {
 let instance, contractAddress, owner, phoenixCrw;
 
 async function getInstance() {
-  return await AdvancedZToken.deployed();
+  return await MyToken.deployed();
 }
 
 async function signMessage(msgToSign, user) {
@@ -208,3 +208,203 @@ contract("ZToken Contract ", async (accounts) => {
     }
   });
 });
+
+// ================================
+// AdvancedZToken
+// ================================
+
+describe("Advanced: Delegate Transfer", async () => {
+  let methodWord_transfer = "0xa9059cbb"; //  First 4 bytes of keccak-256 hash of "transfer"
+  let methodWord_approve = "0x095ea7b3"; //  First 4 bytes of keccak-256 hash of "approve"
+  let methodWord_increaseApproval = "0xd73dd623";
+  let methodWord_decreaseApproval = "0x66188463";
+
+  it("preauthorized transfer:", async () => {
+    let broadcaster = accounts[9];
+    let user = alice;
+    let recipient = bob;
+
+    let token = web3.utils.fromAscii("ot-1");
+    let networkFee = 20;
+    let amount = 100 * DECIMAL_MULTIPLIER;
+    // let commission = (await instance.calculateCommission(amount)).toNumber();
+
+    let msgToSign = await instance.getProofTransfer(
+      methodWord_transfer,
+      token,
+      networkFee,
+      broadcaster,
+      to,
+      amount
+    );
+    let { signedMessage, r, s, v } = await signMessage(msgToSign, user);
+    let signer = await instance.getSigner(msgToSign, r, s, v);
+    expect(signer).to.equal(user);
+
+    let [userBalance, recipientBalance, broadcasterBalance, crwBalance] =
+      await Promise.all([
+        getBalance(user),
+        getBalance(recipient),
+        getBalance(broadcaster),
+        getBalance(owner),
+        getBalance(phoenixCrw)
+      ]);
+    // bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint networkFee, address to, uint amount
+    await instance.preAuthorizedTransfer(
+      msgToSign,
+      r,
+      s,
+      v,
+      token,
+      networkFee,
+      recipient,
+      amount,
+      { from: broadcaster }
+    );
+
+    let [
+      userBalanceNew,
+      recipientBalanceNew,
+      broadcasterBalanceNew,
+      crwBalanceNew,
+    ] = await Promise.all([
+      getBalance(user),
+      getBalance(recipient),
+      getBalance(broadcaster),
+      getBalance(centralRevenueWallet),
+    ]);
+
+    expect(userBalanceNew).to.equal(
+      userBalance - amount - networkFee - commission
+    );
+    expect(recipientBalanceNew).to.equal(recipientBalance + amount);
+    expect(crwBalanceNew).to.equal(crwBalance + commission);
+    expect(broadcasterBalanceNew).to.equal(broadcasterBalance + networkFee);
+  });
+
+  it("preauthorize approval", async () => {
+    let broadcaster = accounts[9],
+      signer = alice,
+      spender = bob,
+      amount = 100 * DECIMAL_MULTIPLIER;
+
+    let initialAllowance = (
+      await instance.allowance(signer, spender)
+    ).toNumber();
+
+    let networkFee = 20;
+    let token = web3.utils.fromAscii(`ot-${Math.random()}`);
+    let msgToSign = await instance.getProofApproval(
+      methodWord_approve,
+      token,
+      networkFee,
+      broadcaster,
+      spender,
+      amount
+    );
+    let { signedMessage, r, s, v } = await signMessage(msgToSign, signer);
+    let expectedSigner = await instance.getSigner(msgToSign, r, s, v);
+    expect(expectedSigner).to.equal(signer);
+
+    await instance.preAuthorizedApproval(
+      methodWord_approve,
+      msgToSign,
+      r,
+      s,
+      v,
+      token,
+      networkFee,
+      spender,
+      amount,
+      { from: broadcaster }
+    );
+
+    let newAllowance = (await instance.allowance(signer, spender)).toNumber();
+    expect(newAllowance).to.equal(amount);
+  });
+
+  it("preauthorize increase approval", async () => {
+    let broadcaster = accounts[9],
+      signer = alice,
+      spender = bob,
+      amount = 100 * DECIMAL_MULTIPLIER;
+
+    let initialAllowance = (
+      await instance.allowance(signer, spender)
+    ).toNumber();
+
+    let networkFee = 20;
+    let token = web3.utils.fromAscii(`ot-${Math.random()}`);
+    let msgToSign = await instance.getProofApproval(
+      methodWord_increaseApproval,
+      token,
+      networkFee,
+      broadcaster,
+      spender,
+      amount
+    );
+    let { signedMessage, r, s, v } = await signMessage(msgToSign, signer);
+    let expectedSigner = await instance.getSigner(msgToSign, r, s, v);
+    expect(expectedSigner).to.equal(signer);
+
+    await instance.preAuthorizedApproval(
+      methodWord_increaseApproval,
+      msgToSign,
+      r,
+      s,
+      v,
+      token,
+      networkFee,
+      spender,
+      amount,
+      { from: broadcaster }
+    );
+
+    let newAllowance = (await instance.allowance(signer, spender)).toNumber();
+    expect(newAllowance).to.equal(initialAllowance + amount);
+  });
+
+  it("preauthorize decrease approval", async () => {
+    let broadcaster = accounts[9],
+      signer = alice,
+      spender = bob,
+      amount = 100 * DECIMAL_MULTIPLIER;
+
+    let initialAllowance = (
+      await instance.allowance(signer, spender)
+    ).toNumber();
+
+    let networkFee = 20;
+    let token = web3.utils.fromAscii(`ot-${Math.random()}`);
+    let msgToSign = await instance.getProofApproval(
+      methodWord_decreaseApproval,
+      token,
+      networkFee,
+      broadcaster,
+      spender,
+      amount
+    );
+    let { signedMessage, r, s, v } = await signMessage(msgToSign, signer);
+    let expectedSigner = await instance.getSigner(msgToSign, r, s, v);
+    expect(expectedSigner).to.equal(signer);
+
+    await instance.preAuthorizedApproval(
+      methodWord_decreaseApproval,
+      msgToSign,
+      r,
+      s,
+      v,
+      token,
+      networkFee,
+      spender,
+      amount,
+      { from: broadcaster }
+    );
+
+    let newAllowance = (await instance.allowance(signer, spender)).toNumber();
+    let expectedAllowance =
+      initialAllowance > amount ? initialAllowance - amount : 0;
+    expect(newAllowance).to.equal(expectedAllowance);
+  });
+});
+

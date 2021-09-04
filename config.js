@@ -1,6 +1,8 @@
 let config = {
-  OTContract: "0x57004ddc6729423BaC1fc5dAB7776354bdB13c33",
+  OTContract: "0xeF57163C3a43c8371E5010dbf7e590A178B10b6c",
   DECIMAL_MULTIPLIER: 100000000,
+  name: "MY TOKEN",
+  symbol: "MT"
 };
 
 module.exports = config;
