@@ -35,7 +35,7 @@ function getRSV(signedMsg) {
   return { r, s, v };
 }
 
-contract("ZToken Contract ", async (accounts) => {
+contract("MyToken Contract ", async (accounts) => {
   console.log("Test suite started");
   const deputyOwner = accounts[4];
   const alice = accounts[5];
@@ -48,7 +48,7 @@ contract("ZToken Contract ", async (accounts) => {
     owner = await instance.owner();
     phoenixCrw = await instance.phoenixCrw();
     sellingWallet = await instance.sellingWallet();
-    contractAddress = AdvancedZToken.address;
+    contractAddress = MyToken.address;
   });
 
   async function mintToken(_to, _amount) {
@@ -75,14 +75,14 @@ contract("ZToken Contract ", async (accounts) => {
       assert(totalSupply, 0, "check initial supply failed");
     });
 
-    it("name should be ZToken", async () => {
+    it("name should be MY Token", async () => {
       let name = await instance.name();
-      expect(name).to.equal("ZToken");
+      expect(name).to.equal("MY TOKEN");
     });
 
-    it("symbol should be ZT", async () => {
+    it("symbol should be MT", async () => {
       let symbol = await instance.symbol();
-      expect(symbol).to.equal("ZT");
+      expect(symbol).to.equal("MT");
     });
 
     it("default commission for to be 0.25%", async () => {
@@ -97,7 +97,7 @@ contract("ZToken Contract ", async (accounts) => {
     it("default commission to be 0.005%", async () => {
       let amount = 100 * DECIMAL_MULTIPLIER;
       let commission = (
-        await instance.calculateCommissionToZCrw(amount)
+        await instance.calculateCommissionMyTokenCrw(amount)
       ).toNumber();
       let expectedCommission = (amount * 0.005) / 100;
       expect(expectedCommission).to.equal(commission);
@@ -147,7 +147,7 @@ contract("ZToken Contract ", async (accounts) => {
       });
     });
 
-    it("commission Minting: non phoenix owner can not update commission", async () => {
+    it("commission Minting: Phoenix address only can update commission", async () => {
       try {
         await instance.updateCommssionMint(3, 1, { from: alice }); //3%
       } catch (error) {
@@ -157,7 +157,7 @@ contract("ZToken Contract ", async (accounts) => {
   });
 
   // update commission %age
-  it("commission transfer: only phoenix owner can update commission", async () => {
+  it("commission transfer : To phoenix CRW, only phoenix owner can update commission", async () => {
     let commissionNum = (
       await instance.commission_numerator_phoenix_crw()
     ).toNumber();
@@ -177,7 +177,7 @@ contract("ZToken Contract ", async (accounts) => {
     );
   });
 
-  it("commission transfer: can not update commission for pheonix", async () => {
+  it("commission transfer: To phoenix CRW, Only Phoenix owner can update commission for pheonix", async () => {
     try {
       await instance.updateCommssionMint(5, 1, { from: alice }); //5%
     } catch (error) {
@@ -187,15 +187,15 @@ contract("ZToken Contract ", async (accounts) => {
 
   // commsion transfer z token owner
   it("commission transfer: only owner can update", async () => {
-    let commissionNum = (await instance.commission_numerator_zcrw()).toNumber();
+    let commissionNum = (await instance.commission_numerator_tokenCrw()).toNumber();
     let commissionDeno = (
-      await instance.commission_denominator_zcrw()
+      await instance.commission_denominator_tokenCrw()
     ).toNumber();
-    await instance.updateCommssionZTranfer(7, 1, { from: owner }); //7%
-    let commission = (await instance.calculateCommissionToZCrw(100)).toNumber();
+    await instance.updateCommssionMyTokenTranfer(7, 1, { from: owner }); //7%
+    let commission = (await instance.calculateCommissionMyTokenCrw(100)).toNumber();
     expect(commission).to.equal(7);
     // reset
-    await instance.updateCommssionZTranfer(commissionNum, commissionDeno, {
+    await instance.updateCommssionMyTokenTranfer(commissionNum, commissionDeno, {
       from: owner,
     });
   });
@@ -210,7 +210,7 @@ contract("ZToken Contract ", async (accounts) => {
 });
 
 // ================================
-// AdvancedZToken
+// AdvancedMyToken
 // ================================
 
 describe("Advanced: Delegate Transfer", async () => {

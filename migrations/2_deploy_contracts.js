@@ -1,4 +1,3 @@
-const Ownership = artifacts.require("Ownable");
 const MyToken = artifacts.require("MyToken");
 const config = require("../config");
 module.exports = function (deployer, network, accounts) {
@@ -8,7 +7,6 @@ module.exports = function (deployer, network, accounts) {
   const _sellingWallet = accounts[4];
   const _name = config.name;
   const _symbol = config.symbol;
-  // deployer.deploy(Ownership);
   deployer.deploy(
     MyToken,
     _goldTokenAddress,
