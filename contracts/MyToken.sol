@@ -382,9 +382,9 @@ contract MyToken is ERC20Token {
     bytes4 public methodWord_approve =
         bytes4(keccak256("approve(address,uint256)"));
     bytes4 public methodWord_increaseApproval =
-        bytes4(keccak256("increaseAllowance(address,uint256)"));
+        bytes4(keccak256("increaseApproval(address,uint256)"));
     bytes4 public methodWord_decreaseApproval =
-        bytes4(keccak256("decreaseAllowance(address,uint256)"));
+        bytes4(keccak256("decreaseApproval(address,uint256)"));
 
     using SafeMath for uint256;
 
@@ -536,7 +536,7 @@ contract MyToken is ERC20Token {
             amount
         );
         address signer = preAuthValidations(proof, message, token, r, s, v);
-        uint256 currentAllowance = allowance(signer, _msgSender());
+        uint256 currentAllowance = allowance(signer, to);
         // Perform approval
         if (methodHash == methodWord_approve) _approve(signer, to, amount);
         else if (methodHash == methodWord_increaseApproval)

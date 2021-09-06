@@ -9,11 +9,10 @@ const MSGS = {
   ONLY_DEPUTY_OWNER: "Only owner or deputy owner is allowed",
   ONLY_PHEONIX_OWNER: "Only Phoenix is allowed",
 };
-let instance, contractAddress, owner, phoenixCrw;
+let instance, contractAddress, owner, phoenixCrw, sellingWallet, myTokenCrw;
 let instanceAdvancedOToken,
   ownerAdvancedToken,
   contractAddressAdvancedToken,
-  centralRevenueWallet,
   minter;
 
 let mytokenContractAddress = MyToken.address;
@@ -40,7 +39,7 @@ async function getInstance() {
 }
 
 async function mintToken(_to, _amount) {
-  _amount = _amount * DECIMAL_MULTIPLIER;
+  _amount = mul(_amount, DECIMAL_MULTIPLIER);
   let hash = generateRandomSawtoothHash();
   let orderid = generateRandomOrderId();
   await instanceAdvancedOToken.mint(_to, _amount, hash, orderid, {
@@ -89,13 +88,14 @@ contract("MyToken Contract ", async (accounts) => {
     instance = await getInstance();
     owner = await instance.owner();
     phoenixCrw = await instance.phoenixCrw();
+    myTokenCrw = await instance.myTokenCrw();
     sellingWallet = await instance.sellingWallet();
+    console.log(sellingWallet, "======sellingWallet")
     contractAddress = MyToken.address;
     // Advanced Token
     instanceAdvancedOToken = await getInstanceAdvancedOToken();
     ownerAdvancedToken = await instanceAdvancedOToken.owner();
     contractAddressAdvancedToken = AdvancedOToken.address;
-    centralRevenueWallet = await instanceAdvancedOToken.centralRevenueWallet();
     minter = await instanceAdvancedOToken.minter();
     await updateDeputyOwner(deputyOwner);
   });
@@ -151,54 +151,6 @@ contract("MyToken Contract ", async (accounts) => {
     });
   });
 
-  describe("Mint OToken", () => {
-    it("check total supply", async () => {
-      let amount = 100 * DECIMAL_MULTIPLIER;
-      const mintAmt = 101;
-      await mintToken(alice, mintAmt);
-      console.log(alice, "==========alice==========");
-      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
-        from: alice,
-      });
-      let totalSupply = (await instanceAdvancedOToken.totalSupply()).toNumber();
-      console.log("totalSupply", totalSupply);
-      expect(totalSupply).to.equal(mintAmt * DECIMAL_MULTIPLIER);
-    });
-  });
-
-  describe("Transfer: Token transfer to MY Token contract", () => {
-    it("transfer to trusted contract executes tokenFallback", async () => {
-      let initialMytokenContractAddressBal = await getBalanceAdvancedOToken(
-        mytokenContractAddress
-      );
-      console.log(
-        initialMytokenContractAddressBal,
-        "initialMytokenContractAddressBal"
-      );
-      await instanceAdvancedOToken.addTrustedContracts(
-        mytokenContractAddress,
-        true,
-        { from: owner }
-      );
-      let isTrusted = await instanceAdvancedOToken.trustedContracts(
-        mytokenContractAddress
-      );
-      console.log("isTrusted", isTrusted, mytokenContractAddress);
-      let sender = alice,
-        amount = 1000 * DECIMAL_MULTIPLIER;
-      await mintToken(sender, 2000);
-      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
-        from: sender,
-      });
-      let newMytokenContractAddressBal = await getBalanceAdvancedOToken(
-        mytokenContractAddress
-      );
-      console.log(newMytokenContractAddressBal, "newMytokenContractAddressBal");
-      expect(newMytokenContractAddressBal).to.equal(
-        initialMytokenContractAddressBal + amount
-      );
-    });
-  });
 
   describe("Update address", () => {
     console.log(":============== default param instance ", instance);
@@ -308,11 +260,91 @@ contract("MyToken Contract ", async (accounts) => {
     });
   });
 
+  describe("Mint OToken", () => {
+    it("check total supply", async () => {
+      let amount = 100 * DECIMAL_MULTIPLIER;
+      const mintAmt = 101;
+      await mintToken(alice, mintAmt);
+      console.log(alice, "==========alice==========");
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
+        from: alice,
+      });
+      let totalSupply = (await instanceAdvancedOToken.totalSupply()).toNumber();
+      console.log("totalSupply", totalSupply);
+      expect(totalSupply).to.equal(mintAmt * DECIMAL_MULTIPLIER);
+    });
+  });
+
+  describe("Transfer: Token transfer to MY Token contract1", () => {
+    it("transfer to trusted contract executes tokenFallback", async () => {
+      let initialMytokenContractAddressBal = await getBalanceAdvancedOToken(
+        mytokenContractAddress
+      );
+      console.log(
+        initialMytokenContractAddressBal,
+        "initialMytokenContractAddressBal"
+      );
+      await instanceAdvancedOToken.addTrustedContracts(
+        mytokenContractAddress,
+        true,
+        { from: owner }
+      );
+      let isTrusted = await instanceAdvancedOToken.trustedContracts(
+        mytokenContractAddress
+      );
+      console.log("isTrusted", isTrusted, mytokenContractAddress);
+      let sender = alice,
+        amount = 1000 * DECIMAL_MULTIPLIER;
+      await mintToken(sender, 2000);
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
+        from: sender,
+      });
+      let newMytokenContractAddressBal = await getBalanceAdvancedOToken(
+        mytokenContractAddress
+      );
+      console.log(newMytokenContractAddressBal, "newMytokenContractAddressBal");
+      expect(newMytokenContractAddressBal).to.equal(
+        initialMytokenContractAddressBal + amount
+      );
+    });
+  });
+
+
+  let amounts = [1, 10, 100, 1000, 13.5, 14.9, 77.7777, 12,32332,  12.42242, 9892.23232, 9999.9999,  78373.612, 018.6726373, 0198293.9182738]
+  let recipient = bob
+  describe('Transfer1', () => {
+    for(let i=0; i<amounts.length; i++){
+      let amount = amounts[i]
+      it(`Transfer1 ${amount}`, async() => {
+        let sender = sellingWallet;
+      // mint in loop
+      amount = parseInt(mul(amount, DECIMAL_MULTIPLIER))
+
+      await mintToken(sender, mul(amounts[i], 10));
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
+        from: sender,
+      });
+
+      let commissionPhoenixCrw = (await instance.calculateCommissionPhoenixCrw(amount)).toNumber();
+      let commisscommissionMyTokenCrw = (await instance.calculateCommissionMyTokenCrw(amount)).toNumber();
+
+      let oldBalances = await Promise.all([getBalance(sender), getBalance(recipient)])
+      let commission = commisscommissionMyTokenCrw + commissionPhoenixCrw
+      console.log("oldBalances", oldBalances, commission, "=========commission")
+      await instance.transfer(recipient, amount, { from: sender})
+      let newBalances = await Promise.all([getBalance(sender), getBalance(recipient)])
+      console.log(newBalances, "newBalancesnewBalances=========")
+      expect(newBalances[0]).to.equal(oldBalances[0] - amount)
+      expect(newBalances[1]).to.equal(oldBalances[1] + amount - commission)
+      })
+    }
+  })
+
   // ================================
   // Preauthorized Transaction
   // ================================
 
-  describe("Preauthorized Transaction: Delegate Transfer", async () => {
+  describe("Preauthorized Transaction: Delegate call", async () => {
     let methodWord_transfer = "0xa9059cbb"; //  First 4 bytes of keccak-256 hash of "transfer"
     let methodWord_approve = "0x095ea7b3"; //  First 4 bytes of keccak-256 hash of "approve"
     let methodWord_increaseApproval = "0xd73dd623";
@@ -321,12 +353,20 @@ contract("MyToken Contract ", async (accounts) => {
     it("preauthorized transfer:", async () => {
       let broadcaster = accounts[9];
       let user = alice;
-      let recipient = bob;
-
+      let to = bob;
+      console.log(broadcaster, "==================")
       let token = web3.utils.fromAscii("ot-1");
       let networkFee = 20;
       let amount = 100 * DECIMAL_MULTIPLIER;
-      // let commission = (await instance.calculateCommission(amount)).toNumber();
+      let totAmt = networkFee + amount
+      let commissionPhoenixCrw = (await instance.calculateCommissionPhoenixCrw(amount)).toNumber();
+      let commissncommissionMyTokenCrw = (await instance.calculateCommissionMyTokenCrw(amount)).toNumber();
+      console.log(commissionPhoenixCrw , commissncommissionMyTokenCrw);
+      let commission = add(commissionPhoenixCrw, commissncommissionMyTokenCrw)
+      await mintToken(user, totAmt); // mint otoken
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, totAmt, {
+        from: user
+      });
 
       let msgToSign = await instance.getProofTransfer(
         methodWord_transfer,
@@ -336,49 +376,56 @@ contract("MyToken Contract ", async (accounts) => {
         to,
         amount
       );
-      let { signedMessage, r, s, v } = await signMessage(msgToSign, user);
+      console.log(msgToSign, "msgToSignmsgToSignmsgToSign====")
+      let { signedMessage, r, s, v } = await signMessage(msgToSign, sellingWallet);
+      console.log({ signedMessage, r, s, v }, "============={ signedMessage, r, s, v }")
       let signer = await instance.getSigner(msgToSign, r, s, v);
-      expect(signer).to.equal(user);
+      console.log(signer, user, "================console.log(signer, user)")
 
-      let [userBalance, recipientBalance, broadcasterBalance, crwBalance] =
+      expect(signer).to.equal(sellingWallet);
+      let [userBalance, recipientBalance, broadcasterBalance, phoenixCrwBalance, myTokenCrwBalance] =
         await Promise.all([
-          getBalance(user),
-          getBalance(recipient),
+          getBalance(sellingWallet),
+          getBalance(to),
           getBalance(broadcaster),
-          getBalance(owner),
           getBalance(phoenixCrw),
+          getBalance(myTokenCrw)
         ]);
+        // 0 0 0 275000000 0
+        console.log(userBalance, recipientBalance, broadcasterBalance, phoenixCrwBalance, myTokenCrwBalance)
       // bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint networkFee, address to, uint amount
-      await instance.preAuthorizedTransfer(
+      let testPreAuth = await instance.preAuthorizedTransfer(
         msgToSign,
         r,
         s,
         v,
         token,
         networkFee,
-        recipient,
+        to,
         amount,
         { from: broadcaster }
       );
-
+      // console.log(testPreAuth, "=================")
       let [
         userBalanceNew,
         recipientBalanceNew,
         broadcasterBalanceNew,
-        crwBalanceNew,
+        phoenixCrwBalanceNew,
+        myTokenCrwBalanceNew
       ] = await Promise.all([
-        getBalance(user),
-        getBalance(recipient),
+        getBalance(sellingWallet),
+        getBalance(to),
         getBalance(broadcaster),
-        getBalance(centralRevenueWallet),
+        getBalance(phoenixCrw),
+        getBalance(myTokenCrw)
       ]);
-
-      expect(userBalanceNew).to.equal(
-        userBalance - amount - networkFee - commission
-      );
-      expect(recipientBalanceNew).to.equal(recipientBalance + amount);
-      expect(crwBalanceNew).to.equal(crwBalance + commission);
+      // 0 9999000000 20 275500000 500000
+      console.log(userBalanceNew, recipientBalanceNew, broadcasterBalanceNew, phoenixCrwBalanceNew, myTokenCrwBalanceNew)
+      expect(userBalanceNew).to.equal(userBalance - amount - networkFee);
+      expect(recipientBalanceNew).to.equal(recipientBalance + amount - commission);
       expect(broadcasterBalanceNew).to.equal(broadcasterBalance + networkFee);
+      expect(phoenixCrwBalanceNew).to.equal(phoenixCrwBalance + commissionPhoenixCrw);
+      expect(myTokenCrwBalanceNew).to.equal(myTokenCrwBalance + commissncommissionMyTokenCrw);
     });
 
     it("preauthorize approval", async () => {
@@ -419,6 +466,7 @@ contract("MyToken Contract ", async (accounts) => {
       );
 
       let newAllowance = (await instance.allowance(signer, spender)).toNumber();
+      console.log(newAllowance, amount, "========newAllowance")
       expect(newAllowance).to.equal(amount);
     });
 
