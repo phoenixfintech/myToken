@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.0;
@@ -8,12 +7,18 @@ import "./utils/math/SafeMath.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
 import "./token/ERC20/ERC20.sol";
 
-abstract contract TokenInterface {
-    function balanceOf(address account) external view virtual returns (uint256);
+abstract contract TokenInterface is IERC20 {
+    function balanceOf(address account)
+        external
+        view
+        virtual
+        override
+        returns (uint256);
 
     function transfer(address recipient, uint256 amount)
         external
         virtual
+        override
         returns (bool success);
 }
 
@@ -45,7 +50,12 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         uint256 _denominator,
         string _data
     );
-    event TransferPreSigned(address _from, address _to, uint256 _value, uint256 _networkFee);
+    event TransferPreSigned(
+        address _from,
+        address _to,
+        uint256 _value,
+        uint256 _networkFee
+    );
 
     //public variables
     TokenInterface private backedTokenContract;
@@ -108,14 +118,11 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     }
 
     modifier isContractAddress(address _addressContract) {
-        require(
-            _addressContract.isContract(),
-            "Only contract is allowed"
-        );
+        require(_addressContract.isContract(), "Only contract is allowed");
         _;
     }
 
-    modifier onlyPhoenix {
+    modifier onlyPhoenix() {
         require(msg.sender == phoenixCrw, "Only Phoenix is allowed");
         _;
     }
@@ -168,7 +175,6 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         return decimal;
     }
 
-
     /**
      * @notice Standard transfer function to Transfer token
      * @dev overriden Function of the openzeppelin ERC20 contract
@@ -184,7 +190,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         privateTransfer(msg.sender, recipient, amount);
         return true;
     }
-    
+
     /**
      * @notice Standard transferFrom. Send tokens on behalf of spender
      * @dev overriden Function of the openzeppelin ERC20 contract
@@ -192,19 +198,20 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param sender transfer token from account
      * @param amount The amount to be transferred
      */
-    function transferFrom(address sender, address recipient, uint256 amount)
-        public
-        virtual
-        override
-        returns (bool)
-    {
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) public virtual override returns (bool) {
         uint256 currentAllowance = allowance(sender, _msgSender());
-        require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
+        require(
+            currentAllowance >= amount,
+            "ERC20: transfer amount exceeds allowance"
+        );
         _approve(sender, _msgSender(), currentAllowance.sub(amount));
         privateTransfer(sender, recipient, amount);
         return true;
     }
-    
 
     /**
      * @notice Internal method to handle transfer logic
@@ -214,11 +221,11 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _amount amount of tokens to be transferred
      * @return bool
      */
-    function privateTransfer(address _from, address _recipient, uint256 _amount)
-        internal
-        onlyNonZeroAddress(_recipient)
-        returns (bool)
-    {
+    function privateTransfer(
+        address _from,
+        address _recipient,
+        uint256 _amount
+    ) internal onlyNonZeroAddress(_recipient) returns (bool) {
         uint256 feeToPhoenix = calculateCommissionPhoenixCrw(_amount);
         uint256 feeMyTokenOwner = calculateCommissionMyTokenCrw(_amount);
 
@@ -227,8 +234,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         uint256 amount_credit = feeMyTokenOwner.add(feeToPhoenix);
         _transfer(_from, _recipient, _amount.sub(amount_credit));
         return true;
-    } 
- 
+    }
+
     /**
      * @notice update phoenix wallet address. This address will be responsible for holding commission on tokens transfer
      * @dev Only Phoenix can call
@@ -317,7 +324,10 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _n The numerator of commission
      * @param _d The denominator of commission
      */
-    function updateCommssionMyTokenTranfer(uint256 _n, uint256 _d) public onlyOwner {
+    function updateCommssionMyTokenTranfer(uint256 _n, uint256 _d)
+        public
+        onlyOwner
+    {
         commission_denominator_tokenCrw = _d;
         commission_numerator_tokenCrw = _n;
         emit CommssionUpdate(_n, _d, "MyToken owner's commission");
@@ -334,8 +344,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         commission_numerator_minting = _n;
         emit CommssionUpdate(_n, _d, "Minting commision");
     }
-    
-    
+
     /**
      * @notice Prevents contract from accepting ETHs
      * @dev Contracts can still be sent ETH with self destruct. If anyone deliberately does that, the ETHs will be lost
@@ -343,21 +352,39 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     receive() external payable {
         revert("Contract does not accept ethers");
     }
-    
-    
+
+    /**
+     * @notice Owner can transfer out any accidentally sent ERC20 tokens accept OTokens
+     * @param _tokenAddress The contract address of ERC-20 compitable token
+     * @param _value The number of tokens to be transferred to owner
+     */
+    function transferAnyERC20Token(address _tokenAddress, uint256 _value)
+        public
+        onlyOwner
+    {
+        require(
+            _tokenAddress != address(backedTokenContract),
+            "Can not withdraw Backed Token"
+        );
+        TokenInterface(_tokenAddress).safeTransfer(owner(), _value);
+    }
 }
 
 /**
  * @title AdvancedOToken
- * @author Phoenix 
- */    
+ * @author Phoenix
+ */
 contract MyToken is ERC20Token {
     mapping(address => mapping(bytes32 => bool)) public tokenUsed; // mapping to track token is used or not
-    
-    bytes4 public methodWord_transfer = bytes4(keccak256("transfer(address,uint256)"));
-    bytes4 public methodWord_approve = bytes4(keccak256("approve(address,uint256)"));
-    bytes4 public methodWord_increaseApproval = bytes4(keccak256("increaseAllowance(address,uint256)"));
-    bytes4 public methodWord_decreaseApproval = bytes4(keccak256("decreaseAllowance(address,uint256)"));
+
+    bytes4 public methodWord_transfer =
+        bytes4(keccak256("transfer(address,uint256)"));
+    bytes4 public methodWord_approve =
+        bytes4(keccak256("approve(address,uint256)"));
+    bytes4 public methodWord_increaseApproval =
+        bytes4(keccak256("increaseAllowance(address,uint256)"));
+    bytes4 public methodWord_decreaseApproval =
+        bytes4(keccak256("decreaseAllowance(address,uint256)"));
 
     using SafeMath for uint256;
 
@@ -368,12 +395,20 @@ contract MyToken is ERC20Token {
         address _sellingWallet,
         string memory _name,
         string memory _symbol
-        )  ERC20Token( _goldTokenAddress, _phoenixCrw, _tokenCrw, _sellingWallet, _name, _symbol) {
-    }
+    )
+        ERC20Token(
+            _goldTokenAddress,
+            _phoenixCrw,
+            _tokenCrw,
+            _sellingWallet,
+            _name,
+            _symbol
+        )
+    {}
 
     /**
-    * @dev ID of the executing chain
-    * @return uint value
+     * @dev ID of the executing chain
+     * @return uint value
      */
     function getChainID() public view returns (uint256) {
         uint256 id;
@@ -393,13 +428,17 @@ contract MyToken is ERC20Token {
      * @param token The unique token for each delegated function
      * @return address Signer of message
      */
-    function preAuthValidations(bytes32 proof, bytes32 message, bytes32 token, bytes32 r, bytes32 s, uint8 v)
-        private
-        returns(address)
-    {
+    function preAuthValidations(
+        bytes32 proof,
+        bytes32 message,
+        bytes32 token,
+        bytes32 r,
+        bytes32 s,
+        uint8 v
+    ) private returns (address) {
         address signer = getSigner(message, r, s, v);
-        require(signer != address(0),"Zero address not allowed");
-        require(!tokenUsed[signer][token],"Token already used");
+        require(signer != address(0), "Zero address not allowed");
+        require(!tokenUsed[signer][token], "Token already used");
         require(proof == message, "Invalid proof");
         tokenUsed[signer][token] = true;
         return signer;
@@ -413,18 +452,19 @@ contract MyToken is ERC20Token {
      * @param v Signature component
      * @return address Signer of message
      */
-    function getSigner(bytes32 message, bytes32 r, bytes32 s, uint8 v)
-        public
-        pure
-        returns (address)
-    {
+    function getSigner(
+        bytes32 message,
+        bytes32 r,
+        bytes32 s,
+        uint8 v
+    ) public pure returns (address) {
         bytes memory prefix = "\x19Ethereum Signed Message:\n32";
         bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, message));
         address signer = ecrecover(prefixedHash, v, r, s);
         return signer;
     }
 
-     /**
+    /**
      * @notice Delegated transfer. Gas fee will be paid by relayer
      * @param message The message that user signed
      * @param r Signature component
@@ -436,10 +476,23 @@ contract MyToken is ERC20Token {
      * @param amount The array of amounts to be transferred
      */
     function preAuthorizedTransfer(
-        bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint256 networkFee, address to, uint256 amount)
-        public
-    {
-        bytes32 proof = getProofTransfer(methodWord_transfer, token, networkFee, msg.sender, to, amount);
+        bytes32 message,
+        bytes32 r,
+        bytes32 s,
+        uint8 v,
+        bytes32 token,
+        uint256 networkFee,
+        address to,
+        uint256 amount
+    ) public {
+        bytes32 proof = getProofTransfer(
+            methodWord_transfer,
+            token,
+            networkFee,
+            msg.sender,
+            to,
+            amount
+        );
         address signer = preAuthValidations(proof, message, token, r, s, v);
 
         // Deduct network fee if broadcaster charges network fee
@@ -464,17 +517,32 @@ contract MyToken is ERC20Token {
      * @return Bool value
      */
     function preAuthorizedApproval(
-        bytes4 methodHash, bytes32 message, bytes32 r, bytes32 s, uint8 v, bytes32 token, uint256 networkFee, address to, uint256 amount)
-        public
-        returns (bool)
-    {
-        bytes32 proof = getProofApproval (methodHash, token, networkFee, msg.sender, to, amount);
+        bytes4 methodHash,
+        bytes32 message,
+        bytes32 r,
+        bytes32 s,
+        uint8 v,
+        bytes32 token,
+        uint256 networkFee,
+        address to,
+        uint256 amount
+    ) public returns (bool) {
+        bytes32 proof = getProofApproval(
+            methodHash,
+            token,
+            networkFee,
+            msg.sender,
+            to,
+            amount
+        );
         address signer = preAuthValidations(proof, message, token, r, s, v);
         uint256 currentAllowance = allowance(signer, _msgSender());
         // Perform approval
-        if(methodHash == methodWord_approve) _approve(signer, to, amount);
-        else if(methodHash == methodWord_increaseApproval) _approve(signer, to, currentAllowance.add(amount));
-        else if(methodHash == methodWord_decreaseApproval) _approve(signer, to, currentAllowance.sub(amount));
+        if (methodHash == methodWord_approve) _approve(signer, to, amount);
+        else if (methodHash == methodWord_increaseApproval)
+            _approve(signer, to, currentAllowance.add(amount));
+        else if (methodHash == methodWord_decreaseApproval)
+            _approve(signer, to, currentAllowance.sub(amount));
         return true;
     }
 
@@ -487,22 +555,27 @@ contract MyToken is ERC20Token {
      * @param amount The amount to be transferred
      * @return Bool value
      */
-    function getProofTransfer(bytes4 methodHash, bytes32 token, uint256 networkFee, address broadcaster, address to, uint256 amount)
-        public
-        view
-        returns (bytes32)
-    {
+    function getProofTransfer(
+        bytes4 methodHash,
+        bytes32 token,
+        uint256 networkFee,
+        address broadcaster,
+        address to,
+        uint256 amount
+    ) public view returns (bytes32) {
         require(methodHash == methodWord_transfer, "Method not supported");
-        bytes32 proof = keccak256(abi.encodePacked(
-            getChainID(),
-            bytes4(methodHash),
-            address(this),
-            token,
-            networkFee,
-            broadcaster,
-            to,
-            amount
-    ));
+        bytes32 proof = keccak256(
+            abi.encodePacked(
+                getChainID(),
+                bytes4(methodHash),
+                address(this),
+                token,
+                networkFee,
+                broadcaster,
+                to,
+                amount
+            )
+        );
         return proof;
     }
 
@@ -515,27 +588,32 @@ contract MyToken is ERC20Token {
      * @param amount The amount to be approved
      * @return Bool value
      */
-    function getProofApproval(bytes4 methodHash, bytes32 token, uint256 networkFee, address broadcaster, address to, uint256 amount)
-        public
-        view
-        returns (bytes32)
-    {
+    function getProofApproval(
+        bytes4 methodHash,
+        bytes32 token,
+        uint256 networkFee,
+        address broadcaster,
+        address to,
+        uint256 amount
+    ) public view returns (bytes32) {
         require(
             methodHash == methodWord_approve ||
-            methodHash == methodWord_increaseApproval ||
-            methodHash == methodWord_decreaseApproval,
-            "Method not supported");
-        bytes32 proof = keccak256(abi.encodePacked(
-            getChainID(),
-            bytes4(methodHash),
-            address(this),
-            token,
-            networkFee,
-            broadcaster,
-            to,
-            amount
-        ));
+                methodHash == methodWord_increaseApproval ||
+                methodHash == methodWord_decreaseApproval,
+            "Method not supported"
+        );
+        bytes32 proof = keccak256(
+            abi.encodePacked(
+                getChainID(),
+                bytes4(methodHash),
+                address(this),
+                token,
+                networkFee,
+                broadcaster,
+                to,
+                amount
+            )
+        );
         return proof;
     }
-    
 }

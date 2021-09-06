@@ -2,7 +2,7 @@ const MyToken = artifacts.require("MyToken");
 const { add, mul, div } = require("./helper");
 const config = require("../config");
 const DECIMAL_MULTIPLIER = config.DECIMAL_MULTIPLIER;
-
+const AdvancedOToken = artifacts.require("AdvancedOToken");
 const MSGS = {
   ONLY_OWNER: "Not owner",
   CAN_BURN: "only suspense wallet is allowed",
@@ -10,9 +10,50 @@ const MSGS = {
   ONLY_PHEONIX_OWNER: "Only Phoenix is allowed",
 };
 let instance, contractAddress, owner, phoenixCrw;
+let instanceAdvancedOToken,
+  ownerAdvancedToken,
+  contractAddressAdvancedToken,
+  centralRevenueWallet,
+  minter;
 
+let mytokenContractAddress = MyToken.address;
+
+function generateRandomSawtoothHash() {
+  return (Math.random() + new Date()).toString();
+}
+
+function generateRandomOrderId() {
+  return Math.random().toString(36).substring(7);
+}
+
+async function updateDeputyOwner(address) {
+  let alreadyExists = await instanceAdvancedOToken.deputyOwner();
+  if (alreadyExists == "0x0000000000000000000000000000000000000000")
+    await instanceAdvancedOToken.updateDeputyOwner(address, { from: owner });
+}
+
+async function getInstanceAdvancedOToken() {
+  return await AdvancedOToken.deployed();
+}
 async function getInstance() {
   return await MyToken.deployed();
+}
+
+async function mintToken(_to, _amount) {
+  _amount = _amount * DECIMAL_MULTIPLIER;
+  let hash = generateRandomSawtoothHash();
+  let orderid = generateRandomOrderId();
+  await instanceAdvancedOToken.mint(_to, _amount, hash, orderid, {
+    from: minter,
+  });
+}
+
+async function getBalance(_user) {
+  return (await instance.balanceOf(_user)).toNumber();
+}
+
+async function getBalanceAdvancedOToken(_user) {
+  return (await instanceAdvancedOToken.balanceOf(_user)).toNumber();
 }
 
 async function signMessage(msgToSign, user) {
@@ -43,24 +84,21 @@ contract("MyToken Contract ", async (accounts) => {
   const escrowWallet = accounts[3];
   const newPhoenixAddress = accounts[9];
   beforeEach(async () => {
+    // MyToken
     console.log("BeforeEach");
     instance = await getInstance();
     owner = await instance.owner();
     phoenixCrw = await instance.phoenixCrw();
     sellingWallet = await instance.sellingWallet();
     contractAddress = MyToken.address;
+    // Advanced Token
+    instanceAdvancedOToken = await getInstanceAdvancedOToken();
+    ownerAdvancedToken = await instanceAdvancedOToken.owner();
+    contractAddressAdvancedToken = AdvancedOToken.address;
+    centralRevenueWallet = await instanceAdvancedOToken.centralRevenueWallet();
+    minter = await instanceAdvancedOToken.minter();
+    await updateDeputyOwner(deputyOwner);
   });
-
-  async function mintToken(_to, _amount) {
-    _amount = _amount * DECIMAL_MULTIPLIER;
-    let hash = generateRandomSawtoothHash();
-    let orderid = generateRandomOrderId();
-    await instance.mint(_to, _amount, hash, orderid, { from: minter });
-  }
-
-  async function getBalance(_user) {
-    return (await instance.balanceOf(_user)).toNumber();
-  }
 
   describe("Default params", () => {
     console.log(":============== default param instance ", instance);
@@ -112,6 +150,56 @@ contract("MyToken Contract ", async (accounts) => {
       expect(expectedCommission).to.equal(commission);
     });
   });
+
+  describe("Mint OToken", () => {
+    it("check total supply", async () => {
+      let amount = 100 * DECIMAL_MULTIPLIER;
+      const mintAmt = 101;
+      await mintToken(alice, mintAmt);
+      console.log(alice, "==========alice==========");
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
+        from: alice,
+      });
+      let totalSupply = (await instanceAdvancedOToken.totalSupply()).toNumber();
+      console.log("totalSupply", totalSupply);
+      expect(totalSupply).to.equal(mintAmt * DECIMAL_MULTIPLIER);
+    });
+  });
+
+  describe("Transfer: Token transfer to MY Token contract", () => {
+    it("transfer to trusted contract executes tokenFallback", async () => {
+      let initialMytokenContractAddressBal = await getBalanceAdvancedOToken(
+        mytokenContractAddress
+      );
+      console.log(
+        initialMytokenContractAddressBal,
+        "initialMytokenContractAddressBal"
+      );
+      await instanceAdvancedOToken.addTrustedContracts(
+        mytokenContractAddress,
+        true,
+        { from: owner }
+      );
+      let isTrusted = await instanceAdvancedOToken.trustedContracts(
+        mytokenContractAddress
+      );
+      console.log("isTrusted", isTrusted, mytokenContractAddress);
+      let sender = alice,
+        amount = 1000 * DECIMAL_MULTIPLIER;
+      await mintToken(sender, 2000);
+      await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
+        from: sender,
+      });
+      let newMytokenContractAddressBal = await getBalanceAdvancedOToken(
+        mytokenContractAddress
+      );
+      console.log(newMytokenContractAddressBal, "newMytokenContractAddressBal");
+      expect(newMytokenContractAddressBal).to.equal(
+        initialMytokenContractAddressBal + amount
+      );
+    });
+  });
+
   describe("Update address", () => {
     console.log(":============== default param instance ", instance);
     // Phoneix address update
@@ -211,7 +299,7 @@ contract("MyToken Contract ", async (accounts) => {
       );
     });
 
-    it("commission Transfer: Other than owner can not update commission", async () => {
+    it("commission Transfer: Other than pheonix owner can not update commission", async () => {
       try {
         await instance.updateCommssionMint(7, 1, { from: alice }); //7%
       } catch (error) {
@@ -419,6 +507,35 @@ contract("MyToken Contract ", async (accounts) => {
     });
   });
 
+  describe("Contract validations function", async () => {
+    it("contract does not accept ether", async () => {
+      try {
+        await instance.send(10, { from: alice });
+      } catch (error) {
+        expect(error.message).to.include("Contract does not accept ethers");
+      }
+    });
+
+    it("Can not withdraw tokens OT from MyToken Contract", async () => {
+      try {
+        let tokenBal = await getBalanceAdvancedOToken(contractAddress);
+        console.log(
+          tokenBal,
+          "tokenBaltokenBal",
+          contractAddress,
+          "contractAddress"
+        );
+        await instance.transferAnyERC20Token(
+          contractAddressAdvancedToken,
+          tokenBal,
+          { from: owner }
+        );
+      } catch (error) {
+        expect(error.message).to.include("Can not withdraw Backed Token");
+      }
+    });
+  });
+
   describe("Ownership operations: only owner can call ", async () => {
     it("check if owner is msg.sender", async () => {
       console.log(owner, accounts[0]);
@@ -446,14 +563,6 @@ contract("MyToken Contract ", async (accounts) => {
       }
     });
 
-    it("owner can renounce ownership", async () => {
-      const owner = await instance.owner();
-      console.log(owner, "=====owner");
-      await instance.renounceOwnership({ from: owner });
-      let newOwner = await instance.owner();
-      expect(newOwner).to.equal("0x0000000000000000000000000000000000000000");
-    });
-
     it("non-owner can not renounce ownership", async () => {
       const nonOwner = accounts[2];
       try {
@@ -465,6 +574,12 @@ contract("MyToken Contract ", async (accounts) => {
           "non-owner can not renounce ownership"
         );
       }
+    });
+
+    it("owner can renounce ownership", async () => {
+      await instance.renounceOwnership({ from: owner });
+      let newOwner = await instance.owner();
+      expect(newOwner).to.equal("0x0000000000000000000000000000000000000000");
     });
   });
 });
