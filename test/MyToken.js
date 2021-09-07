@@ -90,7 +90,6 @@ contract("MyToken Contract ", async (accounts) => {
     phoenixCrw = await instance.phoenixCrw();
     myTokenCrw = await instance.myTokenCrw();
     sellingWallet = await instance.sellingWallet();
-    console.log(sellingWallet, "======sellingWallet");
     contractAddress = MyToken.address;
     // Advanced Token
     instanceAdvancedOToken = await getInstanceAdvancedOToken();
@@ -101,10 +100,8 @@ contract("MyToken Contract ", async (accounts) => {
   });
 
   describe("Default params", () => {
-    console.log(":============== default param instance ", instance);
     it("decimals should be 8", async function () {
       let decimals = (await instance.decimals()).toNumber();
-      console.log(decimals, "==========");
       expect(decimals).to.equal(8);
     });
 
@@ -152,11 +149,9 @@ contract("MyToken Contract ", async (accounts) => {
   });
 
   describe("Update address", () => {
-    console.log(":============== default param instance ", instance);
     // Phoneix address update
     it("Phoenix Address Update", async () => {
       let oldPhonixAddress = await instance.phoenixCrw();
-      console.log("oldPhonixAddress", oldPhonixAddress);
       await instance.updatePhoenixAddress(newPhoenixAddress, {
         from: oldPhonixAddress,
       });
@@ -167,13 +162,11 @@ contract("MyToken Contract ", async (accounts) => {
         from: newPhoenixAddress,
       });
       oldPhonixAddress = await instance.phoenixCrw();
-      console.log("Back to same Address", oldPhonixAddress);
       expect("looks good");
     });
   });
 
   describe("Commission precentage", () => {
-    console.log(":============== default param instance ", instance);
     it("commission Minting: it can be updated by phoenix", async () => {
       let commissionNum = (
         await instance.commission_numerator_minting()
@@ -264,12 +257,10 @@ contract("MyToken Contract ", async (accounts) => {
       let amount = 100 * DECIMAL_MULTIPLIER;
       const mintAmt = 101;
       await mintToken(alice, mintAmt);
-      console.log(alice, "==========alice==========");
       await instanceAdvancedOToken.transfer(mytokenContractAddress, amount, {
         from: alice,
       });
       let totalSupply = (await instanceAdvancedOToken.totalSupply()).toNumber();
-      console.log("totalSupply", totalSupply);
       expect(totalSupply).to.equal(mintAmt * DECIMAL_MULTIPLIER);
     });
   });

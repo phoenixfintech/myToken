@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "truffle test",
-    "coverage": "./node_modules/.bin/solidity-coverage",
+    "coverage": "truffle run coverage --test=\"MyToken.js\" --network development",
     "_run-coverage": "truffle run coverage"
   },
   "author": "",
@@ -20,6 +20,7 @@
     "solidity-coverage": "^0.6.7"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^4.2.0"
+    "@openzeppelin/contracts": "^4.2.0",
+    "dev": "^0.1.3"
   }
 }

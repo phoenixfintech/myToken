@@ -9,7 +9,8 @@ module.exports = {
    development: {
      host: "127.0.0.1",
      port: 8545,
-     network_id: "*",
+    //  network_id: "*", // using truffle test, with running gnache
+     network_id: "123", // using npm run coverage , without running gnache
      gas: 0x55D4A80,
    },
    test: {
