@@ -811,6 +811,61 @@ contract("MyToken Contract ", async (accounts) => {
     });
   });
 
+  describe("Burn: transfer backed token from the MyToken contract", async () => {
+    it("Transfer token and burn", async () => {
+        let sender = owner, receiver = bob,
+        amount = 100 * DECIMAL_MULTIPLIER;
+
+        let commission = (await instanceAdvancedOToken.calculateCommission(amount)).toNumber();
+        console.log(commission, "===============")
+        let initialMytokenContractAddressBal = await getBalanceAdvancedOToken(
+          mytokenContractAddress
+        );
+
+        let totalSupply = (await instance.totalSupply()).toNumber();
+        console.log("totalSupply1", totalSupply);
+
+        let sellingWalletBal = await getBalance(
+          sellingWallet
+        );
+        console.log(initialMytokenContractAddressBal, "initialMytokenContractAddressBal", sellingWalletBal);
+          
+        await instance.transferToken(amount, receiver, { from: sender });
+
+        let newMytokenContractAddressBal = await getBalanceAdvancedOToken(
+          mytokenContractAddress
+        );
+        console.log(newMytokenContractAddressBal, "newMytokenContractAddressBal");
+        // commission charged over the amount
+
+        let totalSupplyNew = (await instance.totalSupply()).toNumber();
+        console.log("totalSupply2", totalSupplyNew);
+
+        expect(totalSupplyNew).to.equal(
+          totalSupply - amount - commission
+        );
+        expect(newMytokenContractAddressBal).to.equal(
+          initialMytokenContractAddressBal - amount - commission
+        );
+    });
+
+    it("can not transfer more than the balance", async () => {
+      try {
+        let sender = owner, receiver = bob,
+        amount = 100 * DECIMAL_MULTIPLIER;
+
+        await instanceAdvancedOToken.calculateCommission(amount);
+
+        await instance.transferToken(amount, receiver, { from: sender });
+
+      } catch (error) {
+        expect(error.message).to.include("burn amount exceeds balance");
+      }
+    });
+
+  });
+
+
   describe("Ownership operations: only owner can call ", async () => {
     it("check if owner is msg.sender", async () => {
       console.log(owner, accounts[0]);

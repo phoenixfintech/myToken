@@ -20,6 +20,12 @@ abstract contract TokenInterface is IERC20 {
         virtual
         override
         returns (bool success);
+
+    function calculateCommission(uint256 amount)
+        external
+        view
+        virtual
+        returns (uint256 bal);
 }
 
 /**
@@ -148,7 +154,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
             "Insufficiet balance of token"
         );
         backedTokenContract.transfer(_receiver, _amount);
-        _burn(sellingWallet, _amount);
+        uint256 commission = backedTokenContract.calculateCommission(_amount);
+        _burn(sellingWallet, _amount.add(commission));
     }
 
     /**
