@@ -3,7 +3,6 @@
 pragma solidity ^0.8.0;
 
 import "./access/Ownable.sol";
-import "./utils/math/SafeMath.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
 import "./token/ERC20/ERC20.sol";
 
@@ -46,7 +45,6 @@ interface TokenRecipient {
  */
 contract ERC20Token is Ownable, ERC20, TokenRecipient {
     // attach library functions
-    using SafeMath for uint256;
     using SafeERC20 for TokenInterface;
     using Address for address;
 
@@ -67,11 +65,11 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     TokenInterface private backedTokenContract;
 
     //private variables
-    uint8 private decimal = 8;
+    uint8 private constant decimal = 8;
 
     // These variable help to calculate the commissions on each token transfer transcation
     uint256 public commission_numerator_minting = 1; // commission percentage on minting 0.025%
-    uint256 public commission_denominator_minting = 4;
+    uint256 public commission_denominator_minting = 40;
 
     uint256 public commission_numerator_tokenCrw = 1; // commission percentage to token owner 0.005%
     uint256 public commission_denominator_tokenCrw = 200;
@@ -155,7 +153,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         );
         backedTokenContract.transfer(_receiver, _amount);
         uint256 commission = backedTokenContract.calculateCommission(_amount);
-        _burn(sellingWallet, _amount.add(commission));
+        _burn(sellingWallet, _amount + commission);
     }
 
     /**
@@ -172,7 +170,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     ) external override onlyTokenContract {
         uint256 fee = calculateCommissionMint(_value);
         if (fee > 0) _mint(phoenixCrw, fee);
-        _mint(sellingWallet, _value.sub(fee));
+        _mint(sellingWallet, _value - fee);
     }
 
     ////////////////////////////////////////////////////////////////
@@ -215,7 +213,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
             currentAllowance >= amount,
             "ERC20: transfer amount exceeds allowance"
         );
-        _approve(sender, _msgSender(), currentAllowance.sub(amount));
+        _approve(sender, _msgSender(), currentAllowance - amount);
         privateTransfer(sender, recipient, amount);
         return true;
     }
@@ -238,8 +236,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
 
         if (feeToPhoenix > 0) _transfer(_from, phoenixCrw, feeToPhoenix);
         if (feeMyTokenOwner > 0) _transfer(_from, myTokenCrw, feeMyTokenOwner);
-        uint256 amount_credit = feeMyTokenOwner.add(feeToPhoenix);
-        _transfer(_from, _recipient, _amount.sub(amount_credit));
+        uint256 amount_credit = feeMyTokenOwner + feeToPhoenix;
+        _transfer(_from, _recipient, _amount - amount_credit);
         return true;
     }
 
@@ -269,11 +267,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         view
         returns (uint256)
     {
-        return
-            _amount
-                .mul(commission_numerator_minting)
-                .div(commission_denominator_minting)
-                .div(100);
+        return _amount * commission_numerator_minting / commission_denominator_minting / 100;
     }
 
     /**
@@ -286,11 +280,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         view
         returns (uint256)
     {
-        return
-            _amount
-                .mul(commission_numerator_tokenCrw)
-                .div(commission_denominator_tokenCrw)
-                .div(100);
+            return _amount * commission_numerator_tokenCrw / commission_denominator_tokenCrw / 100;
     }
 
     /**
@@ -303,11 +293,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         view
         returns (uint256)
     {
-        return
-            _amount
-                .mul(commission_numerator_phoenix_crw)
-                .div(commission_denominator_phoenix_crw)
-                .div(100);
+        return _amount * commission_numerator_phoenix_crw / commission_denominator_phoenix_crw / 100;
     }
 
     /**
@@ -317,7 +303,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _d The denominator of commission
      */
     function updateCommssionPhoenixTransfer(uint256 _n, uint256 _d)
-        public
+        external
         onlyPhoenix
     {
         commission_denominator_phoenix_crw = _d;
@@ -332,7 +318,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _d The denominator of commission
      */
     function updateCommssionMyTokenTranfer(uint256 _n, uint256 _d)
-        public
+        external
         onlyOwner
     {
         commission_denominator_tokenCrw = _d;
@@ -346,7 +332,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _n The numerator of commission
      * @param _d The denominator of commission
      */
-    function updateCommssionMint(uint256 _n, uint256 _d) public onlyPhoenix {
+    function updateCommssionMint(uint256 _n, uint256 _d) external onlyPhoenix {
         commission_denominator_minting = _d;
         commission_numerator_minting = _n;
         emit CommssionUpdate(_n, _d, "Minting commision");
@@ -366,7 +352,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
      * @param _value The number of tokens to be transferred to owner
      */
     function transferAnyERC20Token(address _tokenAddress, uint256 _value)
-        public
+        external
         onlyOwner
     {
         require(
@@ -384,16 +370,15 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
 contract MyToken is ERC20Token {
     mapping(address => mapping(bytes32 => bool)) public tokenUsed; // mapping to track token is used or not
 
-    bytes4 public methodWord_transfer =
+    bytes4 public constant methodWord_transfer =
         bytes4(keccak256("transfer(address,uint256)"));
-    bytes4 public methodWord_approve =
+    bytes4 public constant methodWord_approve =
         bytes4(keccak256("approve(address,uint256)"));
-    bytes4 public methodWord_increaseApproval =
+    bytes4 public constant methodWord_increaseApproval =
         bytes4(keccak256("increaseApproval(address,uint256)"));
-    bytes4 public methodWord_decreaseApproval =
+    bytes4 public constant methodWord_decreaseApproval =
         bytes4(keccak256("decreaseApproval(address,uint256)"));
 
-    using SafeMath for uint256;
 
     constructor(
         address _goldTokenAddress,
@@ -491,7 +476,7 @@ contract MyToken is ERC20Token {
         uint256 networkFee,
         address to,
         uint256 amount
-    ) public {
+    ) external {
         bytes32 proof = getProofTransfer(
             methodWord_transfer,
             token,
@@ -533,7 +518,7 @@ contract MyToken is ERC20Token {
         uint256 networkFee,
         address to,
         uint256 amount
-    ) public returns (bool) {
+    ) external returns (bool) {
         bytes32 proof = getProofApproval(
             methodHash,
             token,
@@ -547,9 +532,9 @@ contract MyToken is ERC20Token {
         // Perform approval
         if (methodHash == methodWord_approve) _approve(signer, to, amount);
         else if (methodHash == methodWord_increaseApproval)
-            _approve(signer, to, currentAllowance.add(amount));
+            _approve(signer, to, currentAllowance + amount);
         else if (methodHash == methodWord_decreaseApproval)
-            _approve(signer, to, currentAllowance.sub(amount));
+            _approve(signer, to, currentAllowance - amount);
         return true;
     }
 
