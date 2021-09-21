@@ -120,12 +120,12 @@ contract("MyToken Contract ", async (accounts) => {
       expect(symbol).to.equal("MT");
     });
 
-    it("default commission for to be 0.025%", async () => {
+    it("default commission for to be 0.25%", async () => {
       let amount = 100 * DECIMAL_MULTIPLIER;
       let commission = (
         await instance.calculateCommissionMint(amount)
       ).toNumber();
-      let expectedCommission = (amount * 0.025) / 100;
+      let expectedCommission = (amount * 0.25) / 100;
       expect(expectedCommission).to.equal(commission);
     });
 

@@ -68,8 +68,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
     uint8 private constant decimal = 8;
 
     // These variable help to calculate the commissions on each token transfer transcation
-    uint256 public commission_numerator_minting = 1; // commission percentage on minting 0.025%
-    uint256 public commission_denominator_minting = 40;
+    uint256 public commission_numerator_minting = 1; // commission percentage on minting 0.25%
+    uint256 public commission_denominator_minting = 4;
 
     uint256 public commission_numerator_tokenCrw = 1; // commission percentage to token owner 0.005%
     uint256 public commission_denominator_tokenCrw = 200;
