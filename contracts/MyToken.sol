@@ -25,6 +25,11 @@ abstract contract TokenInterface is IERC20 {
         view
         virtual
         returns (uint256 bal);
+
+    function transferFrom(address sender, address recipient, uint256 amount)
+        external
+        virtual
+        returns (bool success);
 }
 
 /**
@@ -66,7 +71,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
 
     //private variables
     uint8 private constant decimal = 8;
-
+    bool private migrated;
+    bool private paused;
     // These variable help to calculate the commissions on each token transfer transcation
     uint256 public commission_numerator_minting = 1; // commission percentage on minting 0.25%
     uint256 public commission_denominator_minting = 4;
@@ -102,6 +108,8 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         phoenixCrw = _phoenixCrw;
         myTokenCrw = _mytokencrw;
         sellingWallet = _sellingWallet;
+        migrated = false;
+        paused = false;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -131,6 +139,10 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         _;
     }
 
+    modifier isNotPaused {
+        require(paused == false, "Operations paused");
+        _;
+    }
     ////////////////////////////////////////////////////////////////
     //                  Only Owner functions
     ////////////////////////////////////////////////////////////////
@@ -146,6 +158,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         external
         onlyOwner
         onlyNonZeroAddress(_receiver)
+        isNotPaused
     {
         require(
             backedTokenContract.balanceOf(address(this)) >= _amount,
@@ -167,7 +180,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         address _from,
         uint256 _value,
         bytes calldata data
-    ) external override onlyTokenContract {
+    ) external override onlyTokenContract isNotPaused {
         uint256 fee = calculateCommissionMint(_value);
         if (fee > 0) _mint(phoenixCrw, fee);
         _mint(sellingWallet, _value - fee);
@@ -190,6 +203,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         public
         virtual
         override
+        isNotPaused
         returns (bool)
     {
         privateTransfer(msg.sender, recipient, amount);
@@ -207,7 +221,7 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         address sender,
         address recipient,
         uint256 amount
-    ) public virtual override returns (bool) {
+    ) public virtual override isNotPaused returns (bool) {
         uint256 currentAllowance = allowance(sender, _msgSender());
         require(
             currentAllowance >= amount,
@@ -215,6 +229,38 @@ contract ERC20Token is Ownable, ERC20, TokenRecipient {
         );
         _approve(sender, _msgSender(), currentAllowance - amount);
         privateTransfer(sender, recipient, amount);
+        return true;
+    }
+
+    /**
+    * @notice Backed token contract migration function
+    * @dev Replaces old tokens by the new one, can be called only once,
+    * old tokens receiver is the contract owner, new tokens supplier is the contract owner
+    * @param _newGoldAddress New backed contract address
+    */
+    function migrateGoldToken(address _newGoldAddress) public
+    onlyOwner
+    isContractAddress(_newGoldAddress)
+    onlyNonZeroAddress(_newGoldAddress)
+    returns(bool) {
+        require(migrated == false, "Token already migrated");
+        require(_newGoldAddress != address(backedTokenContract), "Same address is not allowed");
+        uint256 balance = backedTokenContract.balanceOf(address(this));
+        backedTokenContract.transfer(owner(), balance);
+        backedTokenContract = TokenInterface(_newGoldAddress);
+        backedTokenContract.transferFrom(owner(), address(this), balance);
+        require(balance == backedTokenContract.balanceOf(address(this)), "Migration: operation error");
+        migrated = true;
+        paused = false;
+        return true;
+    }
+
+    /**
+    * @notice Private method to pause or unpause token operations
+    * @param _value Bool variable that indicates the contract state
+    */
+    function pauseTransfers(bool _value) public onlyOwner returns(bool) {
+        paused = _value;
         return true;
     }
 
